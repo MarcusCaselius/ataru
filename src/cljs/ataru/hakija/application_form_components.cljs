@@ -1,6 +1,6 @@
 (ns ataru.hakija.application-form-components
   (:require [clojure.string :refer [trim]]
-            [re-frame.core :refer [subscribe dispatch]]
+            [re-frame.core :refer [subscribe dispatch dispatch-sync]]
             [cljs.core.match :refer-macros [match]]
             [ataru.application-common.application-field-common :refer [answer-key
                                                            required-hint
@@ -29,7 +29,8 @@
   (let [value  (-> evt .-target .-value)
         valid? (field-value-valid? text-field-data value)]
     (do
-      (dispatch [:application/set-application-field (answer-key text-field-data) {:value value :valid valid?}])
+      ; dispatch-sync because we really really want the value to change NOW. Is a minor UI speed boost.
+      (dispatch-sync [:application/set-application-field (answer-key text-field-data) {:value value :valid valid?}])
       (when-let [rules (not-empty (:rules text-field-data))]
         (dispatch [:application/run-rule rules])))))
 
@@ -43,10 +44,9 @@
                        (:options dropdown-data)))
                    (-> select .-value))
         valid  (field-value-valid? dropdown-data value)]
-    (do
-      (dispatch [:application/set-application-field (answer-key dropdown-data) {:value value :valid valid}])
-      (when-let [rules (not-empty (:rules dropdown-data))]
-        (dispatch [:application/run-rule rules])))))
+    (dispatch [:application/set-application-field (answer-key dropdown-data) {:value value :valid valid}])
+    (when-let [rules (not-empty (:rules dropdown-data))]
+      (dispatch [:application/run-rule rules]))))
 
 (defn- field-id [field-descriptor]
   (str "field-" (:id field-descriptor)))
@@ -66,8 +66,8 @@
          [:span.application__form-field-error "Tarkista muoto"])])))
 
 (defn text-field [field-descriptor & {:keys [div-kwd] :or {div-kwd :div.application__form-field}}]
-  (let [application (subscribe [:state-query [:application]])
-        id (keyword (:id field-descriptor))
+  (let [id (keyword (:id field-descriptor))
+        value (subscribe [:state-query [:application :answers id :value]])
         valid? (subscribe [:state-query [:application :answers id :valid]])]
     (fn [field-descriptor & {:keys [div-kwd] :or {div-kwd :div.application__form-field}}]
       (let [size-class (text-field-size->class (get-in field-descriptor [:params :size]))]
@@ -80,7 +80,8 @@
            :class     (str size-class (if @valid?
                                           " application__form-text-input--normal"
                                           " application__form-field-error"))
-           :value     (textual-field-value field-descriptor @application)
+
+           :value @value
            :on-change (partial textual-field-change field-descriptor)}]]))))
 
 (defn- text-area-size->class [size]
@@ -97,7 +98,9 @@
        [label field-descriptor "application__form-text-area"]
        [:textarea.application__form-text-input.application__form-text-area
         {:class (text-area-size->class (-> field-descriptor :params :size))
-         :value (textual-field-value field-descriptor @application)
+         ; default-value because IE11 will "flicker" on input fields. This has side-effect of NOT showing any
+         ; dynamically made changes to the text-field value.
+         :default-value (textual-field-value field-descriptor @application)
          :on-change (partial textual-field-change field-descriptor)}]])))
 
 (declare render-field)
@@ -133,8 +136,9 @@
                                 [:select.application__form-select
                                  {:value (textual-field-value field-descriptor @application)}
                                  (for [option (:options field-descriptor)]
-                                   ^{:key (:value option)}
-                                   [:option (get-in option [:label :fi])])]]])})))
+                                   (let [value (get-in option [:label :fi])]
+                                     ^{:key value}
+                                     [:option {:value value} value]))]]])})))
 
 (defn render-field
   [field-descriptor & args]

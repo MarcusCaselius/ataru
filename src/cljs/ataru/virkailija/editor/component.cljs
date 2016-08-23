@@ -1,11 +1,10 @@
 (ns ataru.virkailija.editor.component
   (:require [ataru.virkailija.component-data.component :as component]
-            [ataru.virkailija.component-data.person-info-module :as pm]
             [ataru.cljs-util :as util :refer [cljs->str str->cljs new-uuid]]
             [reagent.core :as r]
             [reagent.ratom :refer-macros [reaction]]
             [cljs.core.match :refer-macros [match]]
-            [re-frame.core :refer [subscribe dispatch]]
+            [re-frame.core :refer [subscribe dispatch dispatch-sync]]
             [taoensso.timbre :refer-macros [spy debug]]))
 
 (defn language [lang]
@@ -15,7 +14,7 @@
 
 ; IE only allows this data attribute name for drag event dataTransfer
 ; http://stackoverflow.com/questions/26213011/html5-dragdrop-issue-in-internet-explorer-datatransfer-property-access-not-pos
-(def ^:private ie-compatible-drag-data-attibute-name "Text")
+(def ^:private ie-compatible-drag-data-attribute-name "Text")
 
 (defn- render-checkbox
   [path initial-content]
@@ -35,7 +34,7 @@
 (defn- on-drag-start
   [path]
   (fn [event]
-    (-> event .-dataTransfer (.setData ie-compatible-drag-data-attibute-name (util/cljs->str path)))))
+    (-> event .-dataTransfer (.setData ie-compatible-drag-data-attribute-name (util/cljs->str path)))))
 
 (defn- prevent-default
   [event]
@@ -65,19 +64,25 @@
 
 (defn input-field
   ([path lang]
-   (input-field path lang #(dispatch [:editor/set-component-value (-> % .-target .-value) path :label lang])))
+   (input-field path lang #(dispatch-sync [:editor/set-component-value (-> % .-target .-value) path :label lang])))
   ([path lang dispatch-fn]
    (let [value (subscribe [:editor/get-component-value path])]
-     (r/create-class
-       {:component-did-mount (fn [component]
-                               (when (:focus? @value)
-                                 (let [dom-node (r/dom-node component)]
-                                   (.focus dom-node))))
-        :reagent-render      (fn [path lang]
-                               [:input.editor-form__text-field
-                                {:value     (get-in @value [:label lang])
-                                 :on-change dispatch-fn
-                                 :on-drop   prevent-default}])}))))
+     (input-field
+       path
+       (:focus? @value)
+       (reaction (get-in @value [:label lang]))
+       dispatch-fn)))
+  ([path focus? value dispatch-fn]
+   (r/create-class
+     {:component-did-mount (fn [component]
+                             (when focus?
+                               (let [dom-node (r/dom-node component)]
+                                 (.focus dom-node))))
+      :reagent-render      (fn [_ _ _ _]
+                             [:input.editor-form__text-field
+                              {:value     @value
+                               :on-change dispatch-fn
+                               :on-drop   prevent-default}])})))
 
 (defn text-component [initial-content path & {:keys [header-label size-label]}]
   (let [languages        (subscribe [:editor/languages])
@@ -85,7 +90,7 @@
         radio-group-id   (util/new-uuid)
         radio-buttons    ["S" "M" "L"]
         radio-button-ids (reduce (fn [acc btn] (assoc acc btn (str radio-group-id "-" btn))) {} radio-buttons)
-        size-change      (fn [new-size] (dispatch [:editor/set-component-value new-size path :params :size]))
+        size-change      (fn [new-size] (dispatch-sync [:editor/set-component-value new-size path :params :size]))
         animation-effect (fade-out-effect path)]
     (fn [initial-content path & {:keys [header-label size-label]}]
       [:div.editor-form__component-wrapper
@@ -176,7 +181,7 @@
           :on-click (fn [evt]
                       (.preventDefault evt)
                       (dispatch [:editor/add-dropdown-option path]))}
-         [:img {:src "/lomake-editori/images/add_row.png"}] " Lisää"]]])))
+         [:i.zmdi.zmdi-plus-square] " Lisää"]]])))
 
 (def ^:private toolbar-elements
   {"Lomakeosio"     component/form-section
@@ -213,7 +218,7 @@
        {:on-drop (fn [event]
                    (.preventDefault event)
                    (reset! expanded? false)
-                   (let [source-path (-> event .-dataTransfer (.getData ie-compatible-drag-data-attibute-name) util/str->cljs)]
+                   (let [source-path (-> event .-dataTransfer (.getData ie-compatible-drag-data-attribute-name) util/str->cljs)]
                      (dispatch [:editor/move-component source-path path])))
         :on-drag-enter (fn [event] (.preventDefault event)) ;; IE needs this, otherwise on-drag-over doesn't occur
         :on-drag-over (fn [event]
@@ -250,8 +255,8 @@
              ^{:key lang}
              [:input.editor-form__text-field
               {:value     (get-in @value [:label lang])
-               :on-change #(dispatch [:editor/set-component-value (-> % .-target .-value) path :label lang])
-               :on-drop prevent-default}]))]]
+               :on-change #(dispatch-sync [:editor/set-component-value (-> % .-target .-value) path :label lang])
+               :on-drop   prevent-default}]))]]
        children
        [drag-n-drop-spacer (conj path :children (count children))]
        [add-component (conj path :children (count children))]])))
