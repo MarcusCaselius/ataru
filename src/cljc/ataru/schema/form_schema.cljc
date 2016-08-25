@@ -28,7 +28,7 @@
 (s/defschema Form {(s/optional-key :id)            s/Int
                    :name                           s/Str
                    (s/optional-key :created-by)   s/Str
-                   (s/optional-key :modified-time) #?(:clj org.joda.time.DateTime
+                   (s/optional-key :created-time) #?(:clj org.joda.time.DateTime
                                                       :cljs s/Str)
                    s/Any                           s/Any})
 
@@ -125,7 +125,7 @@
    :lang                            s/Str
    :state                           s/Str
    (s/optional-key :applicant-name) (s/maybe s/Str)
-   (s/optional-key :modified-time)  org.joda.time.DateTime})
+   (s/optional-key :created-time)  org.joda.time.DateTime})
 
 (s/defschema Application
   {(s/optional-key :key)           s/Str
@@ -133,7 +133,7 @@
    :lang                           s/Str
    :answers                        [Answer]
    (s/optional-key :id)            s/Int
-   (s/optional-key :modified-time) org.joda.time.DateTime})
+   (s/optional-key :created-time) org.joda.time.DateTime})
 
 (def application-states (s/enum "received" "accepted" "rejected"))
 
@@ -143,7 +143,7 @@
 
 (s/defschema Review
   {:id                              s/Int
-   (s/optional-key :modified-time)  org.joda.time.DateTime
+   (s/optional-key :created-time)  org.joda.time.DateTime
    :state                           application-states
    :notes                           (s/maybe s/Str)})
 

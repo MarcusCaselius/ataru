@@ -28,8 +28,8 @@
 (defn sorted-by-time [m]
   (into (sorted-map-by
           (fn [k1 k2]
-            (let [v1 (-> (get m k1) :modified-time)
-                  v2 (-> (get m k2) :modified-time)]
+            (let [v1 (-> (get m k1) :created-time)
+                  v2 (-> (get m k2) :created-time)]
               (match [v1 v2]
                      [nil nil] 0
                      [_   nil] 1
@@ -161,7 +161,7 @@
             (update-in db
                        [:editor :forms form-id]
                        merge
-                       (select-keys response [:content :created-by :modified-time]))
+                       (select-keys response [:content :created-by :created-time]))
             (assoc-in [:editor :autosave]
                       (autosave/interval-loop {:subscribe-path [:editor :forms form-id]
                                                :changed-predicate
@@ -173,8 +173,8 @@
 
                                                         :else
                                                         (not=
-                                                          (dissoc prev :modified-time)
-                                                          (dissoc current :modified-time))))
+                                                          (dissoc prev :created-time)
+                                                          (dissoc current :created-time))))
                                                :handler
                                                (fn [form previous-autosave-form]
                                                  (dispatch [:editor/save-form]))}))))))
@@ -216,7 +216,7 @@
 
 (defn- set-modified-time
   [form]
-  (assoc-in form [:modified-time] (temporal/time->iso-str (:modified-time form))))
+  (assoc-in form [:created-time] (temporal/time->iso-str (:created-time form))))
 
 (defn- remove-focus
   [form]
@@ -238,7 +238,7 @@
         "/lomake-editori/api/forms"
         form
         (fn [db updated-form]
-          (assoc-in db [:editor :forms (:id updated-form) :modified-time] (:modified-time updated-form)))))
+          (assoc-in db [:editor :forms (:id updated-form) :created-time] (:created-time updated-form)))))
     db))
 
 (register-handler :editor/save-form save-form)
